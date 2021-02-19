@@ -5,6 +5,7 @@ set -ex
 GOOS=linux go build
 
 docker kill vaultplg 2>/dev/null || true
+mkdir -p tmp
 tmpdir=$(mktemp -d tmp/vaultplgXXXXXX)
 mkdir "$tmpdir/data"
 docker run --rm -d -p8200:8200 --name vaultplg -v "$(pwd)/$tmpdir/data":/data -v $(pwd):/example --cap-add=IPC_LOCK -e 'VAULT_LOCAL_CONFIG=
