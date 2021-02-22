@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	REPOSITORY_OWNER_SEPERATOR = "-"
-	RUN_IN_PROGRESS            = "in_progress"
+	RUN_IN_PROGRESS = "in_progress"
 )
 
 func (b *backend) pathLogin() *framework.Path {
