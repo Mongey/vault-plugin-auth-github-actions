@@ -63,7 +63,7 @@ func (b *backend) Repository(ctx context.Context, s logical.Storage, n string) (
 		return nil, err
 	}
 	if entry == nil {
-		return nil, nil
+		return &RepositoryEntry{}, nil
 	}
 
 	var result RepositoryEntry
