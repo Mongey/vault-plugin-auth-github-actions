@@ -8,11 +8,11 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-const PATH_PREFIX = "organizations"
+const ORG_PATH_PREFIX = "organizations"
 
 func (b *backend) pathOrganizationsList() *framework.Path {
 	return &framework.Path{
-		Pattern: PATH_PREFIX + "/?$",
+		Pattern: ORG_PATH_PREFIX + "/?$",
 
 		Operations: map[logical.Operation]framework.OperationHandler{
 			logical.ListOperation: &framework.PathOperation{
@@ -27,7 +27,7 @@ func (b *backend) pathOrganizationsList() *framework.Path {
 
 func (b *backend) pathOrganizations() *framework.Path {
 	return &framework.Path{
-		Pattern: PATH_PREFIX + `/(?P<name>.+)`,
+		Pattern: ORG_PATH_PREFIX + `/(?P<name>.+)`,
 		Fields: map[string]*framework.FieldSchema{
 			"name": {
 				Type:        framework.TypeString,
@@ -63,7 +63,7 @@ func (b *backend) Organization(ctx context.Context, s logical.Storage, n string)
 		return nil, err
 	}
 	if entry == nil {
-		return nil, nil
+		return &OrganizationEntry{}, nil
 	}
 
 	var result OrganizationEntry

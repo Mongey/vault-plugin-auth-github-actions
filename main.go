@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/google/go-github/v32/github"
 
+	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/vault/api"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
@@ -50,6 +52,7 @@ func Backend(c *logical.BackendConfig) *backend {
 	var b backend
 
 	paths := []*framework.Path{
+		b.pathConfig(),
 		b.pathLogin(),
 		b.pathOrganizations(),
 		b.pathRepositories(),
@@ -89,7 +92,20 @@ func (b *backend) pathAuthRenew(ctx context.Context, req *logical.Request, d *fr
 	runID := req.Auth.InternalData["run_id"].(int64)
 	runNumber := req.Auth.InternalData["run_number"].(int)
 
+	config, err := b.Config(ctx, req.Storage)
+	if err != nil {
+		return nil, err
+	}
+
 	client := githubClientFromToken(ctx, token)
+
+	if config.BaseURL != "" {
+		parsedURL, err := url.Parse(config.BaseURL)
+		if err != nil {
+			return nil, errwrap.Wrapf("successfully parsed base_url when set but failing to parse now: {{err}}", err)
+		}
+		client.BaseURL = parsedURL
+	}
 
 	run, _, err := client.Actions.GetWorkflowRunByID(context.Background(), owner, repository, runID)
 	if err != nil {

@@ -63,9 +63,21 @@ you use the published checksums to verify integrity.
           echo $MY_VAR $FOO $NPM_TOKEN
 ```
 
-
 ### Assign a default policy to all repositories in your organization
 
 ```
 $ vault write auth/github-actions/organizations/Mongey policies=admin
+```
+
+## Configuration
+
+To configure it, use the `/config` endpoint with the following arguments:
+
+  * `base_url` (string, optional) - For GitHub Enterprise or other API-compatible
+     servers, the base URL to access the server.
+
+For example:
+
+```
+vault write auth/github-actions/config base_url=https://enterprise.github.com/
 ```

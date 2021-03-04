@@ -3,16 +3,18 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"time"
 
+	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/helper/cidrutil"
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
 const (
-	REPOSITORY_OWNER_SEPERATOR = "-"
-	RUN_IN_PROGRESS            = "in_progress"
+	RUN_IN_PROGRESS = "in_progress"
 )
 
 func (b *backend) pathLogin() *framework.Path {
@@ -48,6 +50,22 @@ func (b *backend) pathAuthLogin(ctx context.Context, req *logical.Request, d *fr
 	inputRunID := d.Get("run_id").(string)
 	runNumber := d.Get("run_number").(int)
 
+	config, err := b.Config(ctx, req.Storage)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for a CIDR match.
+	if len(config.TokenBoundCIDRs) > 0 {
+		if req.Connection == nil {
+			b.Logger().Warn("token bound CIDRs found but no connection information available for validation")
+			return nil, logical.ErrPermissionDenied
+		}
+		if !cidrutil.RemoteAddrIsOk(req.Connection.RemoteAddr, config.TokenBoundCIDRs) {
+			return nil, logical.ErrPermissionDenied
+		}
+	}
+
 	runID, err := strconv.ParseInt(inputRunID, 10, 64)
 	if err != nil {
 		return nil, err
@@ -55,6 +73,15 @@ func (b *backend) pathAuthLogin(ctx context.Context, req *logical.Request, d *fr
 
 	repository := repositoryName(fullRepoName, owner)
 	client := githubClientFromToken(ctx, token)
+
+	if config.BaseURL != "" {
+		parsedURL, err := url.Parse(config.BaseURL)
+		if err != nil {
+			return nil, errwrap.Wrapf("successfully parsed base_url when set but failing to parse now: {{err}}", err)
+		}
+		client.BaseURL = parsedURL
+	}
+
 	run, _, err := client.Actions.GetWorkflowRunByID(context.Background(), owner, repository, runID)
 	if err != nil {
 		return nil, err
@@ -65,25 +92,28 @@ func (b *backend) pathAuthLogin(ctx context.Context, req *logical.Request, d *fr
 	}
 
 	var policies []string
+
 	organizationEntry, err := b.Organization(ctx, req.Storage, owner)
 	if err != nil {
 		b.Logger().Warn(fmt.Sprintf("unable to retrieve %s: %s", owner, err.Error()))
 	}
-
 	if organizationEntry == nil {
 		b.Logger().Debug(fmt.Sprintf("unable to find %s, does not currently exist", owner))
 	}
+	if len(organizationEntry.Policies) > 0 {
+		policies = append(policies, organizationEntry.Policies...)
+	}
 
-	policies = append(policies, organizationEntry.Policies...)
-	repositoryEntry, err := b.Repository(ctx, req.Storage, fullRepoName)
+	repositoryEntry, err := b.Repository(ctx, req.Storage, owner+"/"+repository)
 	if err != nil {
-		b.Logger().Warn(fmt.Sprintf("unable to retrieve %s: %s", fullRepoName, err.Error()))
+		b.Logger().Warn(fmt.Sprintf("unable to retrieve %s/%s: %s", owner, repository, err.Error()))
 	}
-
 	if repositoryEntry == nil {
-		b.Logger().Debug(fmt.Sprintf("unable to find %s, does not currently exist", fullRepoName))
+		b.Logger().Debug(fmt.Sprintf("unable to find %s/%s, does not currently exist", owner, repository))
 	}
-	policies = append(policies, repositoryEntry.Policies...)
+	if len(repositoryEntry.Policies) > 0 {
+		policies = append(policies, repositoryEntry.Policies...)
+	}
 
 	return &logical.Response{
 		Auth: &logical.Auth{
@@ -96,7 +126,8 @@ func (b *backend) pathAuthLogin(ctx context.Context, req *logical.Request, d *fr
 			},
 			Policies: policies,
 			Metadata: map[string]string{
-				"owner": owner,
+				"owner":      owner,
+				"repository": repository,
 			},
 			LeaseOptions: logical.LeaseOptions{
 				TTL:       30 * time.Second,
