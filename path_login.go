@@ -117,6 +117,13 @@ func (b *backend) pathAuthLogin(ctx context.Context, req *logical.Request, d *fr
 
 	return &logical.Response{
 		Auth: &logical.Auth{
+			Alias: &logical.Alias{
+				Name: fmt.Sprintf("%s/%s", owner, repository),
+				Metadata: map[string]string{
+					"owner":      owner,
+					"repository": repository,
+				},
+			},
 			InternalData: map[string]interface{}{
 				"token":      token,
 				"owner":      owner,
@@ -129,6 +136,7 @@ func (b *backend) pathAuthLogin(ctx context.Context, req *logical.Request, d *fr
 				"owner":      owner,
 				"repository": repository,
 			},
+			DisplayName: fmt.Sprintf("%s/%s", owner, repository),
 			LeaseOptions: logical.LeaseOptions{
 				TTL:       30 * time.Second,
 				MaxTTL:    60 * time.Minute,
